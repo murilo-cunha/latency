@@ -3,23 +3,32 @@ import os
 import time
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
-import tomllib
+import tomli
 
 from pydantic import BaseModel
 from typing import Annotated, Literal
 
 import modal
 
-requirements_txt_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
-requirements = (
-    tomllib.loads(requirements_txt_path.read_text())
-    .get("project", {})
-    .get("optional-dependencies", {})
-    .get("modal-app", {})
-)
-requirements_data = base64.b64encode("\n".join(requirements).encode("utf-8")).decode(
-    "utf-8"
-)
+requirements_txt_path = (
+    Path(__file__).resolve().parents[1] / "pyproject.toml"
+)  # "pyproject.toml"
+
+if requirements_txt_path.is_file():
+    requirements = (
+        tomli.loads(requirements_txt_path.read_text())
+        .get("project", {})
+        .get("optional-dependencies", {})
+        .get("modal-app", {})
+    )
+    requirements_data = base64.b64encode("\n".join(requirements).encode("utf-8")).decode(
+        "utf-8"
+    )
+else:
+    requirements_data = ""
+# requirements_data = base64.b64encode(
+#     requirements_txt_path.read_text().encode("utf-8")
+# ).decode("utf-8")
 
 
 def build_models():
@@ -65,8 +74,8 @@ image = (
         }
     )
     .run_commands(
-        f"echo '{requirements_data}' | base64 --decode > /root/requirements.txt",
-        "pip install -r /root/requirements.txt",
+        f"echo '{requirements_data}' | base64 --decode > /root/requirements-modal.txt",
+        "pip install -r /root/requirements-modal.txt",
         gpu="any",
     )
     .run_function(
@@ -155,6 +164,9 @@ class StabilityLM:
         )
         self.generator.model = torch.compile(self.generator.model)
 
+    def __exit__(self, *args, **kwargs):
+        ...
+
     def get_config(self, completion_request: CompletionRequest) -> Dict[str, Any]:
         return dict(
             pad_token_id=self.generator.tokenizer.eos_token_id,
@@ -202,9 +214,9 @@ class StabilityLM:
     def generate(self, completion_request: CompletionRequest) -> str:
         return "".join(self.generate_completion(completion_request))
 
-    @modal.method()
-    def generate_stream(self, completion_request: CompletionRequest) -> Generator:
-        yield from self.generate_completion(completion_request)
+    # @modal.method()
+    # def generate_stream(self, completion_request: CompletionRequest) -> Generator:
+    #     yield from self.generate_completion(completion_request)
 
 
 def format_prompt(instruction: str) -> str:
@@ -297,35 +309,41 @@ def main():
         CompletionRequest(prompt=q, max_tokens=128) for q in instructions
     ]
     print("Running example non-streaming completions:\n")
-    # for q, a in zip(
-    #     instructions, list(StabilityLM().generate.map(instruction_requests))
-    # ):
-    #     print(f"{q_style}{q}{q_end}\n{a}\n\n")
-
-    i = 0
-    print(
-        f"{q_style}{instructions[i]}{q_end}\n{StabilityLM().generate(instruction_requests[i])}\n\n"
-    )
-
-    print("Running example streaming completion:\n")
-    # for part in StabilityLM().generate_stream.call(
-    for part in StabilityLM().generate_stream(
-        CompletionRequest(
-            prompt="Generate a list of ten sure-to-be unicorn AI startup names.",
-            max_tokens=128,
-            stream=True,
-        )
+    for q, a in zip(
+        instructions, list(StabilityLM().generate.map(instruction_requests))
     ):
-        print(part, end="", flush=True)
-"""
-# TODO:
-- test local script
-- check that we don't need pydantic
-- replace pydantic with dataclass
-- remove pydantic and fastapi deps form pyproject.toml
-- check that local and remote scripts are working with utils
-- add docstrings and documentation (ruff lint)
-- add scripts to pdm (lint, hooks)
-- add pre-commit hooks and make sure they are compliant
-- add README documentation
-"""
+        print(f"{q_style}{q}{q_end}\n{a}\n\n")
+    # build_models()
+    # i = 0
+    # with StabilityLM() as stability_lm:
+    #     print(
+    #         f"{q_style}{instructions[i]}{q_end}\n{stability_lm.generate(instruction_requests[i])}\n\n"
+    #     )
+
+
+
+    # print("Running example streaming completion:\n")
+    # for part in StabilityLM().generate_stream.call(
+    # # for part in StabilityLM().generate_stream(
+    #     CompletionRequest(
+    #         prompt="Generate a list of ten sure-to-be unicorn AI startup names.",
+    #         max_tokens=128,
+    #         stream=True,
+    #     )
+    # ):
+    #     print(part, end="", flush=True)
+
+
+# """
+# # TODO:
+# - test local script
+# - check that we don't need pydantic
+# - replace pydantic with dataclass
+# - remove pydantic and fastapi deps form pyproject.toml
+# - check that local and remote scripts are working with utils
+# - add docstrings and documentation (ruff lint)
+# - add scripts to pdm (lint, hooks)
+# - add pre-commit hooks and make sure they are compliant
+# - add README documentation
+# - add CICD for linting and tagging
+# """

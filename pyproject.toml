@@ -10,6 +10,7 @@ dependencies = [
     "pydantic>=1.10.7",
     "fastapi>=0.95.1",
     "modal-client>=0.49.2059",
+    "tomli>=2.0.1",
 ]
 description = ""
 dynamic = ["version"]
@@ -27,6 +28,7 @@ modal-app = [
     "sentencepiece~=0.1.98",
     "hf-transfer~=0.1.3",
     "msgspec~=0.14.2",
+    "tomli>=2.0.1",
 ]
 [build-system]
 build-backend = "pdm.backend"
