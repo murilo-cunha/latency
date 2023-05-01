@@ -592,7 +592,7 @@ summary = "Backport of pathlib-compatible object wrapper for zip files"
 [metadata]
 lock_version = "4.2"
 groups = ["default", "dev", "modal-app"]
-content_hash = "sha256:e927da30adbc1969317520cf913e09ce3d67f0dc646852b075cdd5603ebcf7c7"
+content_hash = "sha256:51c5feda8e14b68b05debec272aa390d6f0306d0c240ae35c34e4be84dc2b560"
 
 [metadata.files]
 "accelerate 0.18.0" = [

@@ -2,17 +2,15 @@ import base64
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Sequence, Union
 import tomli
 
-from pydantic import BaseModel
+from dataclasses import asdict, dataclass
 from typing import Annotated, Literal
 
 import modal
 
-requirements_txt_path = (
-    Path(__file__).resolve().parents[1] / "pyproject.toml"
-)  # "pyproject.toml"
+requirements_txt_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
 if requirements_txt_path.is_file():
     requirements = (
@@ -21,14 +19,11 @@ if requirements_txt_path.is_file():
         .get("optional-dependencies", {})
         .get("modal-app", {})
     )
-    requirements_data = base64.b64encode("\n".join(requirements).encode("utf-8")).decode(
-        "utf-8"
-    )
+    requirements_data = base64.b64encode(
+        "\n".join(requirements).encode("utf-8")
+    ).decode("utf-8")
 else:
     requirements_data = ""
-# requirements_data = base64.b64encode(
-#     requirements_txt_path.read_text().encode("utf-8")
-# ).decode("utf-8")
 
 
 def build_models():
@@ -92,7 +87,8 @@ stub = modal.Stub(
 )
 
 
-class CompletionRequest(BaseModel):
+@dataclass
+class CompletionRequest:
     prompt: Annotated[str, "The prompt for text completion"]
     model: Annotated[
         Literal["stabilityai/stablelm-tuned-alpha-7b"],
@@ -112,7 +108,7 @@ class CompletionRequest(BaseModel):
     stream: Annotated[
         bool, "Whether to stream the generated text or return it all at once."
     ] = False
-    stop: Annotated[Union[str, List[str]], "Any additional stop words."] = []
+    stop: Annotated[Union[str, Sequence[str]], "Any additional stop words."] = ()
     top_k: Annotated[
         int,
         "Limits the set of tokens to consider for next token generation to the top k.",
@@ -181,9 +177,11 @@ class StabilityLM:
                 )
             ),
             max_new_tokens=completion_request.max_tokens,
-            **completion_request.dict(
-                exclude={"prompt", "model", "stop", "max_tokens", "stream"}
-            ),
+            **{
+                k: v
+                for k, v in asdict(completion_request).items()
+                if k not in ("prompt", "model", "stop", "max_tokens", "stream")
+            },
         )
 
     def generate_completion(
@@ -214,88 +212,9 @@ class StabilityLM:
     def generate(self, completion_request: CompletionRequest) -> str:
         return "".join(self.generate_completion(completion_request))
 
-    # @modal.method()
-    # def generate_stream(self, completion_request: CompletionRequest) -> Generator:
-    #     yield from self.generate_completion(completion_request)
-
 
 def format_prompt(instruction: str) -> str:
     return f"<|USER|>{instruction}<|ASSISTANT|>"
-
-
-if stub.is_inside():
-    import uuid
-
-    import msgspec
-
-    class Choice(msgspec.Struct):
-        text: str
-        index: Union[int, None] = 0
-        logprobs: Union[int, None] = None
-        finish_reason: Union[str, None] = None
-
-    class CompletionResponse(msgspec.Struct, kw_only=True):
-        id: Union[str, None] = None
-        object: str = "text_completion"
-        created: Union[int, None] = None
-        model: str
-        choices: List[Choice]
-
-        def __post_init__(self):
-            if self.id is None:
-                self.id = str(uuid.uuid4())
-            if self.created is None:
-                self.created = int(time.time())
-
-
-# @stub.function()
-# @modal.web_endpoint(method="POST")
-# async def completions(completion_request: CompletionRequest):
-#     from fastapi import Response, status
-#     from fastapi.responses import StreamingResponse
-
-#     response_id = str(uuid.uuid4())
-#     response_utc = int(time.time())
-
-#     if not completion_request.stream:
-#         return Response(
-#             content=msgspec.json.encode(
-#                 CompletionResponse(
-#                     id=response_id,
-#                     created=response_utc,
-#                     model=completion_request.model,
-#                     choices=[
-#                         Choice(
-#                             index=0,
-#                             text=StabilityLM().generate.call(
-#                                 completion_request=completion_request
-#                             ),
-#                         )
-#                     ],
-#                 )
-#             ),
-#             status_code=status.HTTP_200_OK,
-#             media_type="application/json",
-#         )
-
-#     def wrapped_stream():
-#         for new_text in StabilityLM().generate_stream.call(
-#             completion_request=completion_request
-#         ):
-#             yield msgspec.json.encode(
-#                 CompletionResponse(
-#                     id=response_id,
-#                     created=response_utc,
-#                     model=completion_request.model,
-#                     choices=[Choice(index=0, text=new_text)],
-#                 )
-#             ) + b"\n\n"
-
-#     return StreamingResponse(
-#         content=wrapped_stream(),
-#         status_code=status.HTTP_200_OK,
-#         media_type="text/event-stream",
-#     )
 
 
 @stub.local_entrypoint()
@@ -319,19 +238,6 @@ def main():
     #     print(
     #         f"{q_style}{instructions[i]}{q_end}\n{stability_lm.generate(instruction_requests[i])}\n\n"
     #     )
-
-
-
-    # print("Running example streaming completion:\n")
-    # for part in StabilityLM().generate_stream.call(
-    # # for part in StabilityLM().generate_stream(
-    #     CompletionRequest(
-    #         prompt="Generate a list of ten sure-to-be unicorn AI startup names.",
-    #         max_tokens=128,
-    #         stream=True,
-    #     )
-    # ):
-    #     print(part, end="", flush=True)
 
 
 # """
