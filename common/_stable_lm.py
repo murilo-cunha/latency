@@ -10,12 +10,12 @@ from typing import Annotated, Literal
 
 import modal
 
-requirements_txt_path = Path(__file__).resolve().parent / "pyproject.toml"
+requirements_txt_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
 requirements = (
     tomllib.loads(requirements_txt_path.read_text())
     .get("project", {})
     .get("optional-dependencies", {})
-    .get("modal", {})
+    .get("modal-app", {})
 )
 requirements_data = base64.b64encode("\n".join(requirements).encode("utf-8")).decode(
     "utf-8"
@@ -236,54 +236,54 @@ if stub.is_inside():
                 self.created = int(time.time())
 
 
-@stub.function()
-@modal.web_endpoint(method="POST")
-async def completions(completion_request: CompletionRequest):
-    from fastapi import Response, status
-    from fastapi.responses import StreamingResponse
+# @stub.function()
+# @modal.web_endpoint(method="POST")
+# async def completions(completion_request: CompletionRequest):
+#     from fastapi import Response, status
+#     from fastapi.responses import StreamingResponse
 
-    response_id = str(uuid.uuid4())
-    response_utc = int(time.time())
+#     response_id = str(uuid.uuid4())
+#     response_utc = int(time.time())
 
-    if not completion_request.stream:
-        return Response(
-            content=msgspec.json.encode(
-                CompletionResponse(
-                    id=response_id,
-                    created=response_utc,
-                    model=completion_request.model,
-                    choices=[
-                        Choice(
-                            index=0,
-                            text=StabilityLM().generate.call(
-                                completion_request=completion_request
-                            ),
-                        )
-                    ],
-                )
-            ),
-            status_code=status.HTTP_200_OK,
-            media_type="application/json",
-        )
+#     if not completion_request.stream:
+#         return Response(
+#             content=msgspec.json.encode(
+#                 CompletionResponse(
+#                     id=response_id,
+#                     created=response_utc,
+#                     model=completion_request.model,
+#                     choices=[
+#                         Choice(
+#                             index=0,
+#                             text=StabilityLM().generate.call(
+#                                 completion_request=completion_request
+#                             ),
+#                         )
+#                     ],
+#                 )
+#             ),
+#             status_code=status.HTTP_200_OK,
+#             media_type="application/json",
+#         )
 
-    def wrapped_stream():
-        for new_text in StabilityLM().generate_stream.call(
-            completion_request=completion_request
-        ):
-            yield msgspec.json.encode(
-                CompletionResponse(
-                    id=response_id,
-                    created=response_utc,
-                    model=completion_request.model,
-                    choices=[Choice(index=0, text=new_text)],
-                )
-            ) + b"\n\n"
+#     def wrapped_stream():
+#         for new_text in StabilityLM().generate_stream.call(
+#             completion_request=completion_request
+#         ):
+#             yield msgspec.json.encode(
+#                 CompletionResponse(
+#                     id=response_id,
+#                     created=response_utc,
+#                     model=completion_request.model,
+#                     choices=[Choice(index=0, text=new_text)],
+#                 )
+#             ) + b"\n\n"
 
-    return StreamingResponse(
-        content=wrapped_stream(),
-        status_code=status.HTTP_200_OK,
-        media_type="text/event-stream",
-    )
+#     return StreamingResponse(
+#         content=wrapped_stream(),
+#         status_code=status.HTTP_200_OK,
+#         media_type="text/event-stream",
+#     )
 
 
 @stub.local_entrypoint()
@@ -297,13 +297,19 @@ def main():
         CompletionRequest(prompt=q, max_tokens=128) for q in instructions
     ]
     print("Running example non-streaming completions:\n")
-    for q, a in zip(
-        instructions, list(StabilityLM().generate.map(instruction_requests))
-    ):
-        print(f"{q_style}{q}{q_end}\n{a}\n\n")
+    # for q, a in zip(
+    #     instructions, list(StabilityLM().generate.map(instruction_requests))
+    # ):
+    #     print(f"{q_style}{q}{q_end}\n{a}\n\n")
+
+    i = 0
+    print(
+        f"{q_style}{instructions[i]}{q_end}\n{StabilityLM().generate(instruction_requests[i])}\n\n"
+    )
 
     print("Running example streaming completion:\n")
-    for part in StabilityLM().generate_stream.call(
+    # for part in StabilityLM().generate_stream.call(
+    for part in StabilityLM().generate_stream(
         CompletionRequest(
             prompt="Generate a list of ten sure-to-be unicorn AI startup names.",
             max_tokens=128,
@@ -311,3 +317,15 @@ def main():
         )
     ):
         print(part, end="", flush=True)
+"""
+# TODO:
+- test local script
+- check that we don't need pydantic
+- replace pydantic with dataclass
+- remove pydantic and fastapi deps form pyproject.toml
+- check that local and remote scripts are working with utils
+- add docstrings and documentation (ruff lint)
+- add scripts to pdm (lint, hooks)
+- add pre-commit hooks and make sure they are compliant
+- add README documentation
+"""
