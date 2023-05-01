@@ -1,17 +1,19 @@
-import base64
 import os
-import time
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Union
-import tomllib
+from typing import Any, Dict, Generator, Optional, Sequence, Union
 
-from pydantic import BaseModel
+from dataclasses import asdict, dataclass
 from typing import Annotated, Literal
 
-import modal
+Q_STYLE, Q_END = "\033[1m", "\033[0m"
+INSTRUCTIONS = [
+    "Generate a list of the 10 most beautiful cities in the world.",
+    "How can I tell apart female and male red cardinals?",
+]
 
 
-class CompletionRequest(BaseModel):
+@dataclass
+class CompletionRequest:
     prompt: Annotated[str, "The prompt for text completion"]
     model: Annotated[
         Literal["stabilityai/stablelm-tuned-alpha-7b"],
@@ -31,7 +33,7 @@ class CompletionRequest(BaseModel):
     stream: Annotated[
         bool, "Whether to stream the generated text or return it all at once."
     ] = False
-    stop: Annotated[Union[str, List[str]], "Any additional stop words."] = []
+    stop: Annotated[Union[str, Sequence[str]], "Any additional stop words."] = ()
     top_k: Annotated[
         int,
         "Limits the set of tokens to consider for next token generation to the top k.",
@@ -41,84 +43,6 @@ class CompletionRequest(BaseModel):
     ] = True
 
 
-def build_models():
-    import torch
-    from huggingface_hub import snapshot_download
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    model_path = snapshot_download(
-        "stabilityai/stablelm-tuned-alpha-7b",
-        ignore_patterns=["*.md"],
-    )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=torch.float16,
-        device_map="auto",
-        local_files_only=True,
-    )
-    model.save_pretrained(model_path, safe_serialization=True, max_shard_size="24GB")
-    tok = AutoTokenizer.from_pretrained(model_path)
-    tok.save_pretrained(model_path)
-
-    for p in Path(model_path).rglob("*.bin"):
-        p.unlink()
-
-
-requirements_txt_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
-requirements = (
-    tomllib.loads(requirements_txt_path.read_text())
-    .get("project", {})
-    .get("optional-dependencies", {})
-    .get("modal-app", {})
-)
-requirements_data = base64.b64encode("\n".join(requirements).encode("utf-8")).decode(
-    "utf-8"
-)
-
-
-def _fmt_prompt(instruction: str) -> str:
-    return f"<|USER|>{instruction}<|ASSISTANT|>"
-
-
-image = (
-    modal.Image.conda()
-    .apt_install("git", "software-properties-common", "wget")
-    .conda_install(
-        "cudatoolkit-dev=11.7",
-        "pytorch-cuda=11.7",
-        "rust=1.69.0",
-        channels=["nvidia", "pytorch", "conda-forge"],
-    )
-    .env(
-        {
-            "HF_HOME": "/root",
-            "HF_HUB_ENABLE_HF_TRANSFER": "1",
-            "SAFETENSORS_FAST_GPU": "1",
-            "BITSANDBYTES_NOWELCOME": "1",
-            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
-            "PIP_NO_CACHE_DIR": "1",
-        }
-    )
-    .run_commands(
-        f"echo '{requirements_data}' | base64 --decode > /root/requirements.txt",
-        "pip install -r /root/requirements.txt",
-        gpu="any",
-    )
-    .run_function(
-        build_models,
-        gpu=None,
-        timeout=3600,
-    )
-)
-
-stub = modal.Stub(
-    name="example-stability-lm",
-    image=image,
-    secrets=[modal.Secret({"REPO_ID": "stabilityai/stablelm-tuned-alpha-7b"})],
-)
-
-
-@stub.cls(gpu="A10G")
 class StabilityLM:
     def __init__(
         self,
@@ -160,6 +84,9 @@ class StabilityLM:
         )
         self.generator.model = torch.compile(self.generator.model)
 
+    def __exit__(self, *args, **kwargs):
+        ...
+
     def get_config(self, completion_request: CompletionRequest) -> Dict[str, Any]:
         return dict(
             pad_token_id=self.generator.tokenizer.eos_token_id,
@@ -174,9 +101,11 @@ class StabilityLM:
                 )
             ),
             max_new_tokens=completion_request.max_tokens,
-            **completion_request.dict(
-                exclude={"prompt", "model", "stop", "max_tokens", "stream"}
-            ),
+            **{
+                k: v
+                for k, v in asdict(completion_request).items()
+                if k not in ("prompt", "model", "stop", "max_tokens", "stream")
+            },
         )
 
     def generate_completion(
@@ -187,7 +116,7 @@ class StabilityLM:
 
         from transformers import GenerationConfig
 
-        text = _fmt_prompt(completion_request.prompt)
+        text = self._fmt_prompt(completion_request.prompt)
         gen_config = GenerationConfig(**self.get_config(completion_request))
         stop_words = self.generator.tokenizer.convert_ids_to_tokens(
             gen_config.eos_token_id
@@ -203,46 +132,72 @@ class StabilityLM:
                 yield stop_words_pattern.sub("", new_text)
         thread.join()
 
-    @modal.method()
     def generate(self, completion_request: CompletionRequest) -> str:
         return "".join(self.generate_completion(completion_request))
 
-    @modal.method()
-    def generate_stream(self, completion_request: CompletionRequest) -> Generator:
-        yield from self.generate_completion(completion_request)
+    @staticmethod
+    def _fmt_prompt(instruction: str) -> str:
+        return f"<|USER|>{instruction}<|ASSISTANT|>"
 
 
+def build_models(**download_kwargs):
+    import torch
+    from huggingface_hub import snapshot_download
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
-Q_STYLE, Q_END = "\033[1m", "\033[0m"
-INSTRUCTIONS = [
-    "Generate a list of the 10 most beautiful cities in the world.",
-    "How can I tell apart female and male red cardinals?",
-]
-INSTRUCTION_REQUESTS = [
-    CompletionRequest(prompt=q, max_tokens=128) for q in INSTRUCTIONS
-]
-    
-@stub.local_entrypoint()
+    download_kwargs["ignore_patterns"] = download_kwargs.get("ignore_patterns") or [
+        "*.md"
+    ]
+    download_kwargs["repo_id"] = (
+        download_kwargs.get("repo_id") or "stabilityai/stablelm-tuned-alpha-7b"
+    )
+    model_path = snapshot_download(**download_kwargs)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        torch_dtype=torch.float16,
+        device_map="auto",
+        local_files_only=True,
+    )
+    model.save_pretrained(model_path, safe_serialization=True, max_shard_size="24GB")
+    tok = AutoTokenizer.from_pretrained(model_path)
+    tok.save_pretrained(model_path)
+
+    for p in Path(model_path).rglob("*.bin"):
+        p.unlink()
+
+
 def main():
-   
+    q_style, q_end = "\033[1m", "\033[0m"
+    instructions = [
+        "Generate a list of the 10 most beautiful cities in the world.",
+        "How can I tell apart female and male red cardinals?",
+    ]
+    instruction_requests = [
+        CompletionRequest(prompt=q, max_tokens=128) for q in instructions
+    ]
     print("Running example non-streaming completions:\n")
     # for q, a in zip(
     #     instructions, list(StabilityLM().generate.map(instruction_requests))
     # ):
     #     print(f"{q_style}{q}{q_end}\n{a}\n\n")
-
+    print("building models at", build_models())
     i = 0
-    print(
-        f"{Q_STYLE}{INSTRUCTIONS[i]}{Q_END}\n{StabilityLM().generate(INSTRUCTION_REQUESTS[i])}\n\n"
-    )
-
-    print("Running example streaming completion:\n")
-    # for part in StabilityLM().generate_stream.call(
-    for part in StabilityLM().generate_stream(
-        CompletionRequest(
-            prompt="Generate a list of ten sure-to-be unicorn AI startup names.",
-            max_tokens=128,
-            stream=True,
+    with StabilityLM() as stability_lm:
+        print(
+            f"{q_style}{instructions[i]}{q_end}\n{stability_lm.generate(instruction_requests[i])}\n\n"
         )
-    ):
-        print(part, end="", flush=True)
+
+
+# """
+# # TODO:
+# - test local script
+# - check that we don't need pydantic
+# - replace pydantic with dataclass
+# - remove pydantic and fastapi deps form pyproject.toml
+# - check that local and remote scripts are working with utils
+# - add docstrings and documentation (ruff lint)
+# - add scripts to pdm (lint, hooks)
+# - add pre-commit hooks and make sure they are compliant
+# - add README documentation
+# - add CICD for linting and tagging
+# """

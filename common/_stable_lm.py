@@ -228,16 +228,16 @@ def main():
         CompletionRequest(prompt=q, max_tokens=128) for q in instructions
     ]
     print("Running example non-streaming completions:\n")
-    for q, a in zip(
-        instructions, list(StabilityLM().generate.map(instruction_requests))
-    ):
-        print(f"{q_style}{q}{q_end}\n{a}\n\n")
-    # build_models()
-    # i = 0
-    # with StabilityLM() as stability_lm:
-    #     print(
-    #         f"{q_style}{instructions[i]}{q_end}\n{stability_lm.generate(instruction_requests[i])}\n\n"
-    #     )
+    # for q, a in zip(
+    #     instructions, list(StabilityLM().generate.map(instruction_requests))
+    # ):
+    #     print(f"{q_style}{q}{q_end}\n{a}\n\n")
+    print("building models at", build_models())
+    i = 0
+    with StabilityLM() as stability_lm:
+        print(
+            f"{q_style}{instructions[i]}{q_end}\n{stability_lm.generate(instruction_requests[i])}\n\n"
+        )
 
 
 # """
