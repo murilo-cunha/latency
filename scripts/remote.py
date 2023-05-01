@@ -1,16 +1,17 @@
 import base64
-import os
 from pathlib import Path
 import modal
 import tomli
-from typing import Any, Dict, Generator, Optional, Sequence, Union
 
-from dataclasses import asdict, dataclass
-from typing import Annotated, Literal
-import common
+from common.utils import (
+    build_models,
+    StabilityLM,
+    CompletionRequest,
+    Q_STYLE,
+    Q_END,
+    INSTRUCTIONS,
+)
 
-
-# Modal requirements
 
 requirements_txt_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
@@ -54,7 +55,7 @@ image = (
         gpu="any",
     )
     .run_function(
-        common.build_models,
+        build_models,
         gpu=None,
         timeout=3600,
     )
@@ -72,7 +73,7 @@ stub = modal.Stub(
     gpu="A10G",
     # mounts=modal.create_package_mounts(["common"]),
 )
-class ModalStabilityLM(common.StabilityLM):
+class ModalStabilityLM(StabilityLM):
     @modal.method()
     def generate(self, *args, **kwargs):
         return super().generate(*args, **kwargs)
@@ -80,14 +81,8 @@ class ModalStabilityLM(common.StabilityLM):
 
 @stub.local_entrypoint()
 def main():
-    Q_STYLE, Q_END = "\033[1m", "\033[0m"
-    INSTRUCTIONS = [
-        "Generate a list of the 10 most beautiful cities in the world.",
-        "How can I tell apart female and male red cardinals?",
-    ]
-
     instruction_requests = [
-        common.CompletionRequest(prompt=q, max_tokens=128) for q in INSTRUCTIONS
+        CompletionRequest(prompt=q, max_tokens=128) for q in INSTRUCTIONS
     ]
 
     print("Running distributed example on cloud:\n")
