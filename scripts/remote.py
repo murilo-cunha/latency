@@ -81,6 +81,7 @@ class ModalStabilityLM(StabilityLM):
 
 @stub.local_entrypoint()
 def main():
+    # `pdm run modal run scripts/remote.py
     instruction_requests = [
         CompletionRequest(prompt=q, max_tokens=128) for q in INSTRUCTIONS
     ]

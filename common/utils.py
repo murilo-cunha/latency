@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Sequence, Union
@@ -48,9 +49,11 @@ class StabilityLM:
         self,
         model_url: str = "stabilityai/stablelm-tuned-alpha-7b",
         decode_kwargs: Optional[Dict[str, Any]] = None,
+        torch_dtype: torch.dtype | None = None
     ):
         self.model_url = model_url
         self.decode_kwargs = decode_kwargs or {}
+        self.torch_dtype = torch_dtype
         self.stop_tokens = [
             "<|USER|>",
             "<|ASSISTANT|>",
@@ -78,11 +81,12 @@ class StabilityLM:
             model=self.model_url,
             tokenizer=tokenizer,
             streamer=self.streamer,
-            torch_dtype=torch.float16,
+            torch_dtype=self.torch_dtype or torch.float16, # if `None`
             device_map="auto",
             model_kwargs={"local_files_only": True},
         )
         self.generator.model = torch.compile(self.generator.model)
+        return self
 
     def __exit__(self, *args, **kwargs):
         ...
@@ -140,7 +144,12 @@ class StabilityLM:
         return f"<|USER|>{instruction}<|ASSISTANT|>"
 
 
-def build_models(**download_kwargs):
+def build_models(
+    offload_dir: Path | None = None,
+    save_model_max_shard_size: str | None = "24GB",
+    torch_dtype: torch.dtype | None = None,
+    **download_kwargs,
+):
     import torch
     from huggingface_hub import snapshot_download
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -154,11 +163,14 @@ def build_models(**download_kwargs):
     model_path = snapshot_download(**download_kwargs)
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
-        torch_dtype=torch.float16,
+        torch_dtype=torch_dtype or torch.float16,  # if `None`
         device_map="auto",
         local_files_only=True,
+        offload_folder=str(offload_dir),
     )
-    model.save_pretrained(model_path, safe_serialization=True, max_shard_size="24GB")
+    model.save_pretrained(
+        model_path, safe_serialization=True, max_shard_size=save_model_max_shard_size
+    )
     tok = AutoTokenizer.from_pretrained(model_path)
     tok.save_pretrained(model_path)
 

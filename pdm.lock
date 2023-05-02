@@ -105,7 +105,7 @@ dependencies = [
 
 [[package]]
 name = "cloudpickle"
-version = "2.2.1"
+version = "2.0.0"
 requires_python = ">=3.6"
 summary = "Extended pickling support for Python objects"
 
@@ -263,7 +263,7 @@ dependencies = [
     "asgiref",
     "certifi",
     "click>=8.1.0",
-    "cloudpickle<2.3.0,>=2.2.0; python_version >= \"3.11\"",
+    "cloudpickle<2.1.0,>=2.0.0; python_version < \"3.11\"",
     "fastapi",
     "grpclib==0.4.3",
     "importlib-metadata>=3.6.0",
@@ -440,6 +440,7 @@ requires_python = ">=3.7"
 summary = "The little ASGI library that shines."
 dependencies = [
     "anyio<5,>=3.4.0",
+    "typing-extensions>=3.10.0; python_version < \"3.10\"",
 ]
 
 [[package]]
@@ -592,7 +593,7 @@ summary = "Backport of pathlib-compatible object wrapper for zip files"
 [metadata]
 lock_version = "4.2"
 groups = ["default", "dev", "modal-app"]
-content_hash = "sha256:51c5feda8e14b68b05debec272aa390d6f0306d0c240ae35c34e4be84dc2b560"
+content_hash = "sha256:799b16e90080a030d21f6b199fc68069d70d274a7515a162cef498c1029156f6"
 
 [metadata.files]
 "accelerate 0.18.0" = [
@@ -805,9 +806,9 @@ content_hash = "sha256:51c5feda8e14b68b05debec272aa390d6f0306d0c240ae35c34e4be84
     {url = "https://files.pythonhosted.org/packages/59/87/84326af34517fca8c58418d148f2403df25303e02736832403587318e9e8/click-8.1.3.tar.gz", hash = "sha256:7682dc8afb30297001674575ea00d1814d808d6a36af415a82bd481d37ba7b8e"},
     {url = "https://files.pythonhosted.org/packages/c2/f1/df59e28c642d583f7dacffb1e0965d0e00b218e0186d7858ac5233dce840/click-8.1.3-py3-none-any.whl", hash = "sha256:bb4d8133cb15a609f44e8213d9b391b0809795062913b383c62be0ee95b1db48"},
 ]
-"cloudpickle 2.2.1" = [
-    {url = "https://files.pythonhosted.org/packages/15/80/44286939ca215e88fa827b2aeb6fa3fd2b4a7af322485c7170d6f9fd96e0/cloudpickle-2.2.1-py3-none-any.whl", hash = "sha256:61f594d1f4c295fa5cd9014ceb3a1fc4a70b0de1164b94fbc2d854ccba056f9f"},
-    {url = "https://files.pythonhosted.org/packages/5f/51/913ecca3970a2227cf4d5e8937df52cc28f465ac442216110b8e3323262d/cloudpickle-2.2.1.tar.gz", hash = "sha256:d89684b8de9e34a2a43b3460fbca07d09d6e25ce858df4d5a44240403b6178f5"},
+"cloudpickle 2.0.0" = [
+    {url = "https://files.pythonhosted.org/packages/07/3c/bf72ebd3e78eb1ef773f4f0650ecdc29c6454aeafe9c08f6da3f227dd2bc/cloudpickle-2.0.0-py3-none-any.whl", hash = "sha256:6b2df9741d06f43839a3275c4e6632f7df6487a1f181f5f46a052d3c917c3d11"},
+    {url = "https://files.pythonhosted.org/packages/25/c4/29b4f944e8709c4cddfdb93f0278f57ba097ed46845d9bdf57178db31c64/cloudpickle-2.0.0.tar.gz", hash = "sha256:5cd02f3b417a783ba84a4ec3e290ff7929009fe51f6405423cfccfadd43ba4a4"},
 ]
 "colorama 0.4.6" = [
     {url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
