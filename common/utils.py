@@ -176,6 +176,7 @@ def build_models(
 
     for p in Path(model_path).rglob("*.bin"):
         p.unlink()
+    return model_path
 
 
 def main():

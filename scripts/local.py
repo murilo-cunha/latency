@@ -19,7 +19,7 @@ def main():
     i = 0
 
     MODEL_DIR = Path(".models/")
-    TORCH_DTYPE = torch.float16
+    TORCH_DTYPE = torch.bfloat16  # https://huggingface.co/databricks/dolly-v2-12b/discussions/8#64377e51369f6f907f5ceca8
     offload_dir = ".offload/"
 
     if MODEL_DIR / "model.safetensors" not in list(MODEL_DIR.rglob("*")):
@@ -35,8 +35,7 @@ def main():
                     repo_id="stabilityai/stablelm-tuned-alpha-3b",
                     local_dir=MODEL_DIR,
                     offload_dir=offload_dir,
-                    # save_model_max_shard_size="10GB",
-                    torch_dtype=TORCH_DTYPE,  # https://stackoverflow.com/a/73530618
+                    torch_dtype=TORCH_DTYPE,
                 ),
             )
     else:  # use downloaded files
