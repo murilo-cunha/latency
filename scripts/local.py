@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from common.utils import (
     INSTRUCTIONS,
@@ -22,6 +23,11 @@ def main():
     offload_dir = ".offload/"
 
     if MODEL_DIR / "model.safetensors" not in list(MODEL_DIR.rglob("*")):
+        # clear dir contents
+        for file in MODEL_DIR.rglob("*"):
+            if file.name not in (".gitkeep", ".gitignore"):
+                os.remove(file)
+        # repopulate dir
         with TemporaryDirectory() as offload_dir:
             print(
                 "Building models at",
