@@ -35,7 +35,7 @@ def main():
                     repo_id="stabilityai/stablelm-tuned-alpha-3b",
                     local_dir=MODEL_DIR,
                     offload_dir=offload_dir,
-                    save_model_max_shard_size="10GB",
+                    # save_model_max_shard_size="10GB",
                     torch_dtype=TORCH_DTYPE,  # https://stackoverflow.com/a/73530618
                 ),
             )
