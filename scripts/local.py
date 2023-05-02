@@ -8,8 +8,10 @@ from common.utils import (
     StabilityLM,
     build_models,
 )
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from tempfile import TemporaryDirectory
 import torch
+from transformers import AutoTokenizer, TextIteratorStreamer, pipeline
 
 
 def main():
@@ -19,7 +21,9 @@ def main():
     i = 0
 
     MODEL_DIR = Path(".models/")
-    TORCH_DTYPE = torch.bfloat16  # https://huggingface.co/databricks/dolly-v2-12b/discussions/8#64377e51369f6f907f5ceca8
+    TORCH_DTYPE = (
+        torch.bfloat16
+    )  # https://huggingface.co/databricks/dolly-v2-12b/discussions/8#64377e51369f6f907f5ceca8
     offload_dir = ".offload/"
 
     if MODEL_DIR / "model.safetensors" not in list(MODEL_DIR.rglob("*")):
@@ -42,7 +46,9 @@ def main():
         print(f"Reusing models from `{MODEL_DIR}/`")
 
     print("Running example non-streaming completions locally:\n")
-    with StabilityLM(model_url=MODEL_DIR, torch_dtype=TORCH_DTYPE) as stability_lm:
+    with StabilityLM(
+        model_url=MODEL_DIR, torch_dtype=TORCH_DTYPE, offload_dir=offload_dir
+    ) as stability_lm:
         print(
             f"{Q_STYLE}{INSTRUCTIONS[i]}{Q_END}\n{stability_lm.generate(instruction_requests[i])}\n\n"
         )

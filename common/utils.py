@@ -49,11 +49,13 @@ class StabilityLM:
         self,
         model_url: str = "stabilityai/stablelm-tuned-alpha-7b",
         decode_kwargs: Optional[Dict[str, Any]] = None,
-        torch_dtype: torch.dtype | None = None
+        torch_dtype: torch.dtype | None = None,
+        offload_dir: str = ".tmp"
     ):
         self.model_url = model_url
         self.decode_kwargs = decode_kwargs or {}
         self.torch_dtype = torch_dtype
+        self.offload_dir = offload_dir
         self.stop_tokens = [
             "<|USER|>",
             "<|ASSISTANT|>",
@@ -69,19 +71,32 @@ class StabilityLM:
         Container-lifeycle method for model setup.
         """
         import torch
-        from transformers import AutoTokenizer, TextIteratorStreamer, pipeline
+        from transformers import (
+            AutoTokenizer,
+            TextIteratorStreamer,
+            pipeline,
+            AutoModelForCausalLM,
+        )
 
         tokenizer = AutoTokenizer.from_pretrained(self.model_url, local_files_only=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            self.model_url,
+            torch_dtype=self.torch_dtype or torch.float16,
+            device_map="auto",
+            local_files_only=True,
+            offload_folder=self.offload_dir,
+        )
+        
         self.stop_ids = tokenizer.convert_tokens_to_ids(self.stop_tokens)
         self.streamer = TextIteratorStreamer(
             tokenizer, skip_prompt=True, **self.decode_kwargs
         )
         self.generator = pipeline(
             "text-generation",
-            model=self.model_url,
+            model=model,
             tokenizer=tokenizer,
             streamer=self.streamer,
-            torch_dtype=self.torch_dtype or torch.float16, # if `None`
+            torch_dtype=self.torch_dtype or torch.float16,
             device_map="auto",
             model_kwargs={"local_files_only": True},
         )
