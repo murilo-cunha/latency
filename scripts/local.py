@@ -22,17 +22,17 @@ def main():
     offload_dir = ".offload/"
 
     if MODEL_DIR / "model.safetensors" not in list(MODEL_DIR.rglob("*")):
-        # with TemporaryDirectory() as offload_dir:
-        print(
-            "Building models at",
-            build_models(
-                repo_id="stabilityai/stablelm-tuned-alpha-3b",
-                local_dir=MODEL_DIR,
-                offload_dir=offload_dir,
-                save_model_max_shard_size="10GB",
-                torch_dtype=TORCH_DTYPE,  # https://stackoverflow.com/a/73530618
-            ),
-        )
+        with TemporaryDirectory() as offload_dir:
+            print(
+                "Building models at",
+                build_models(
+                    repo_id="stabilityai/stablelm-tuned-alpha-3b",
+                    local_dir=MODEL_DIR,
+                    offload_dir=offload_dir,
+                    save_model_max_shard_size="10GB",
+                    torch_dtype=TORCH_DTYPE,  # https://stackoverflow.com/a/73530618
+                ),
+            )
     else:  # use downloaded files
         print(f"Reusing models from `{MODEL_DIR}/`")
 
