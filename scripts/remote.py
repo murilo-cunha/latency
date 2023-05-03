@@ -1,17 +1,21 @@
+"""Run Stable LM on Modal (remote)."""
+from __future__ import annotations
+
 import base64
 from pathlib import Path
+from typing import Any
+
 import modal
 import tomli
 
 from common.utils import (
-    build_models,
-    StabilityLM,
-    CompletionRequest,
-    Q_STYLE,
-    Q_END,
     INSTRUCTIONS,
+    Q_END,
+    Q_STYLE,
+    CompletionRequest,
+    StabilityLM,
+    build_models,
 )
-
 
 requirements_txt_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
@@ -26,7 +30,7 @@ requirements = (
     else []
 )
 requirements_data = base64.b64encode("\n".join(requirements).encode("utf-8")).decode(
-    "utf-8"
+    "utf-8",
 )
 
 
@@ -47,7 +51,7 @@ image = (
             "BITSANDBYTES_NOWELCOME": "1",
             "PIP_DISABLE_PIP_VERSION_CHECK": "1",
             "PIP_NO_CACHE_DIR": "1",
-        }
+        },
     )
     .run_commands(
         f"echo '{requirements_data}' | base64 --decode > /root/requirements-modal.txt",
@@ -69,25 +73,30 @@ stub = modal.Stub(
 )
 
 
-@stub.cls(
-    gpu="A10G",
-    # mounts=modal.create_package_mounts(["common"]),
-)
+@stub.cls(gpu="A10G")
 class ModalStabilityLM(StabilityLM):
+    """`StabilityLM` wrapper for Modal (remote) usage."""
+
     @modal.method()
-    def generate(self, *args, **kwargs):
+    def generate(
+        self: ModalStabilityLM,
+        *args: Any,  # noqa: ANN401
+        **kwargs: Any,  # noqa: ANN401
+    ) -> str:
+        """Wrap method for Modal (remote) usage."""
         return super().generate(*args, **kwargs)
 
 
 @stub.local_entrypoint()
-def main():
-    # `pdm run modal run scripts/remote.py
+def main() -> None:
+    """Entrypoint for Modal (remote) execution."""
     instruction_requests = [
         CompletionRequest(prompt=q, max_tokens=128) for q in INSTRUCTIONS
     ]
 
     print("Running distributed example on cloud:\n")
     for q, a in zip(
-        INSTRUCTIONS, list(ModalStabilityLM().generate.map(instruction_requests))
+        INSTRUCTIONS,
+        list(ModalStabilityLM().generate.map(instruction_requests)),
     ):
         print(f"{Q_STYLE}{q}{Q_END}\n{a}\n\n")
